@@ -49,6 +49,10 @@ void exibir_texto_pequeno(String texto, int linha) {
   lcd.print(texto);
 }
 
+void processando() {
+  exibir_texto_pequeno("Iniciando...", 0);
+};
+
 // Regras da inicialização
 String regras[] = {
   "1 Baixo: btn 1",
@@ -140,6 +144,12 @@ void inicializacao() {
   exibir_texto_grande("A seguir serao exibidas as regras!", 0, 0);
 
   mostrar_regras();
+  delay(200);
+  exibir_texto_grande("Voce sera encaminhado para o menu!", 0, 0);
+  delay(200);
+  lcd.clear();
+  processando();
+  delay(1000);
   mostrar_menu();
 }
 
@@ -233,6 +243,9 @@ void executar_opcao_menu() {
     pagar();
   } 
   else if (indice_menu == 5) {
+    lcd.clear();
+    processando();
+    delay(1000);
     mostrar_regras();
     mostrar_menu();
   }
