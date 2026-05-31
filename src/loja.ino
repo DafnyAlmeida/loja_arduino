@@ -1,70 +1,101 @@
-// ---------------- ⚙️ Olá, seja bem-vindo(a) à nossa loja! ------------------- //
-// Este coódigo foi desenvolvido por Alberto Kayron, Dafny Sabino, Ícaro Pereira,
+// ---------------- ⚙️ Olá, seja bem-vindo(a) à nossa loja! ----------------- //
+// Este codigo foi desenvolvido por Alberto Kayron, Dafny Sabino, Icaro Pereira,
 // Luna Freitas e Eduarda Andrade
-// -------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
 // Bibliotecas
 #include <Wire.h>
 #include <Adafruit_LiquidCrystal.h>
+#include <avr/pgmspace.h>
 
 Adafruit_LiquidCrystal lcd(0);
 
-// Componentes
-const int BTN_DOWN = 2;
-const int BTN_UP = 3;
-const int BTN_BACK = 4;
-const int BTN_OK = 5;
+// Componentes: byte ocupa 1 byte, suficiente para os pinos
+const byte BTN_DOWN = 2;
+const byte BTN_UP = 3;
+const byte BTN_BACK = 4;
+const byte BTN_OK = 5;
 
-const int LED_VERDE = 6;
-const int LED_VERMELHO = 7;
-const int BUZZER = 8;
+const byte LED_VERDE = 6;
+const byte LED_VERMELHO = 7;
+const byte BUZZER = 8;
 
-// Regras da inicialização
-String regras[] = {
-  "1 Baixo: btn 1",
-  "2 Cima: btn 2",
-  "3 Voltar: btn 3",
-  "4 OK: btn 4"
+// ----------------------------------------------------------------------------
+// TEXTOS SALVOS NA FLASH (PROGMEM), EM VEZ DE OCUPAREM A RAM
+// ----------------------------------------------------------------------------
+
+const char regra0[] PROGMEM = "1 Baixo: btn 1";
+const char regra1[] PROGMEM = "2 Cima: btn 2";
+const char regra2[] PROGMEM = "3 Voltar: btn 3";
+const char regra3[] PROGMEM = "4 OK: btn 4";
+
+const char* const regras[] PROGMEM = {
+  regra0, regra1, regra2, regra3
 };
 
-int total_opcoes = 4;
+const char menu0[] PROGMEM = "Ver produtos";
+const char menu1[] PROGMEM = "Adicionar";
+const char menu2[] PROGMEM = "Excluir";
+const char menu3[] PROGMEM = "Ver carrinho";
+const char menu4[] PROGMEM = "Pagar";
+const char menu5[] PROGMEM = "Ver regras";
 
-String menu[] = {
-  "Ver produtos",
-  "Adicionar",
-  "Excluir",
-  "Ver carrinho",
-  "Pagar",
-  "Ver regras"
+const char* const menu[] PROGMEM = {
+  menu0, menu1, menu2, menu3, menu4, menu5
 };
 
-int indice_menu = 0;
-int total_opcoes_menu = 6;
+const char produto0[] PROGMEM = "Arroz";
+const char produto1[] PROGMEM = "Feijao";
+const char produto2[] PROGMEM = "Leite";
 
-// Carrinho
-String carrinho[10];
-int idsCarrinho[10];
-float precosCarrinho[10];
-int quantidadesCarrinho[10];
+const char* const produtos[] PROGMEM = {
+  produto0, produto1, produto2
+};
 
-float precoCarrinho = 0;
-int quantidadeCarrinho = 0;
-int indice_carrinho = 0;
+const byte TOTAL_OPCOES = 4;
+const byte TOTAL_OPCOES_MENU = 6;
+const byte QUANTIDADE_PRODUTOS = 3;
 
-// Produtos
-String produtos[] = {"Arroz", "Feijao", "Leite"};
-int quantidades[] = {6, 8, 5};
-int ids[] = {1, 2, 3};
-float precos[] = {12.50, 13.00, 11.50};
-int quantidadeProdutos = 3;
+byte indice_menu = 0;
 
-// -------------------------------------------------------------------------------
+// Buffer reutilizado para carregar somente um texto por vez da Flash
+char textoBuffer[40];
+
+// ----------------------------------------------------------------------------
+// PRODUTOS E CARRINHO
+// ----------------------------------------------------------------------------
+
+// O estoque muda durante o programa, portanto continua na RAM
+byte quantidades[QUANTIDADE_PRODUTOS] = {6, 8, 5};
+
+// Estes dados nao mudam e ficam na memoria Flash
+const byte ids[] PROGMEM = {1, 2, 3};
+
+// Valores em centavos: evita float e reduz operacoes pesadas.
+// 1250 = R$ 12,50; 1300 = R$ 13,00; 1150 = R$ 11,50.
+const unsigned int precosCentavos[] PROGMEM = {1250, 1300, 1150};
+
+// A quantidade no carrinho usa o mesmo indice da lista de produtos.
+// Assim nao e necessario guardar nomes, ids e precos novamente.
+byte quantidadesCarrinho[QUANTIDADE_PRODUTOS] = {0, 0, 0};
+
+byte quantidadeCarrinho = 0;                 // Quantidade de tipos de produto
+unsigned long precoCarrinhoCentavos = 0;     // Total da compra
+
+// -----------------------------------------------------------------------------
 // PROTOTIPOS DAS FUNCOES
-// -------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 
-void exibir_texto_grande(String texto, int coluna, int linha);
-void exibir_texto_pequeno(String texto, int linha);
-void exibir_produto_carrinho(int posicao);
+void copiar_texto_flash(const char* const tabela[], byte indice);
+void exibir_texto_grande_P(PGM_P texto, byte coluna, byte linha);
+void exibir_texto_pequeno(const char* texto, byte linha);
+void exibir_texto_pequeno_P(PGM_P texto, byte linha);
+void imprimir_preco(unsigned long valorCentavos);
+byte obter_id(byte indiceProduto);
+unsigned int obter_preco(byte indiceProduto);
+int encontrar_indice_carrinho(byte posicao);
+void exibir_produto_carrinho(byte posicao);
+
 void processando();
 void confirmacao();
 void erro();
@@ -76,7 +107,7 @@ void mostrar_regras();
 
 void mostrar_menu();
 void navegacao_menu();
-void esperar_soltar(int botao);
+void esperar_soltar(byte botao);
 void executar_opcao_menu();
 
 void ver_produtos();
@@ -84,22 +115,30 @@ void adicionar_produto();
 void ver_carrinho();
 void excluir_produto();
 void pagar();
+void inicio_carrinho();
 
-// -------------------------------------------------------------------------------
-// FUNÇÕES SECUNDARIAS
-// -------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// FUNCOES SECUNDARIAS
+// -----------------------------------------------------------------------------
 
-// Funções para exibir texto no LCD
-void exibir_texto_grande(String texto, int coluna, int linha) {
+// Copia apenas o texto necessario da Flash para o buffer reutilizavel.
+void copiar_texto_flash(const char* const tabela[], byte indice) {
+  PGM_P enderecoTexto = (PGM_P) pgm_read_word(&(tabela[indice]));
+  strncpy_P(textoBuffer, enderecoTexto, sizeof(textoBuffer) - 1);
+  textoBuffer[sizeof(textoBuffer) - 1] = '\0';
+}
+
+// Exibe um texto que esta na Flash e realiza scroll quando passar de 16 colunas.
+void exibir_texto_grande_P(PGM_P texto, byte coluna, byte linha) {
   lcd.clear();
   lcd.home();
 
   lcd.setCursor(coluna, linha);
-  lcd.print(texto);
+  lcd.print(reinterpret_cast<const __FlashStringHelper*>(texto));
 
   delay(1000);
 
-  int quantidade_scroll = texto.length() - 16;
+  int quantidade_scroll = strlen_P(texto) - 16;
 
   if (quantidade_scroll < 0) {
     quantidade_scroll = 0;
@@ -116,70 +155,135 @@ void exibir_texto_grande(String texto, int coluna, int linha) {
   lcd.home();
 }
 
-void exibir_texto_pequeno(String texto, int linha) {
+// Usa textos carregados no buffer, como regras e nomes dos produtos.
+void exibir_texto_pequeno(const char* texto, byte linha) {
   lcd.setCursor(0, linha);
-  lcd.print("                ");
+  lcd.print(F("                "));
 
   lcd.setCursor(0, linha);
   lcd.print(texto);
 }
 
-void exibir_produto_carrinho(int posicao) {
-  lcd.clear();
-  lcd.home();
+// Usa textos fixos diretamente da Flash.
+void exibir_texto_pequeno_P(PGM_P texto, byte linha) {
+  lcd.setCursor(0, linha);
+  lcd.print(F("                "));
 
-  lcd.setCursor(0, 0);
+  lcd.setCursor(0, linha);
+  lcd.print(reinterpret_cast<const __FlashStringHelper*>(texto));
+}
 
-  lcd.print(idsCarrinho[posicao]);
-  lcd.print(" | ");
-  lcd.print(carrinho[posicao]);
-  lcd.print(" | R$ ");
-  lcd.print(precosCarrinho[posicao]);
-  lcd.print(" | ");
-  lcd.print(quantidadesCarrinho[posicao]);
+byte obter_id(byte indiceProduto) {
+  return pgm_read_byte(&(ids[indiceProduto]));
+}
 
-  delay(1000);
+unsigned int obter_preco(byte indiceProduto) {
+  return pgm_read_word(&(precosCentavos[indiceProduto]));
+}
 
-  // Faz o texto deslizar para aparecer inteiro
-  for (int i = 0; i < 12; i++) {
-    lcd.scrollDisplayLeft();
-    delay(250);
+void imprimir_preco(unsigned long valorCentavos) {
+  lcd.print(valorCentavos / 100);
+  lcd.print(',');
+
+  byte centavos = valorCentavos % 100;
+  if (centavos < 10) {
+    lcd.print('0');
   }
 
-  delay(1000);
-
-  lcd.clear();
-  lcd.home();
+  lcd.print(centavos);
 }
 
-// Função de espera
+// Converte a pagina do carrinho no indice original do produto.
+// Somente produtos com quantidade maior que zero sao considerados.
+int encontrar_indice_carrinho(byte posicao) {
+  byte posicaoAtual = 0;
+
+  for (byte i = 0; i < QUANTIDADE_PRODUTOS; i++) {
+    if (quantidadesCarrinho[i] > 0) {
+      if (posicaoAtual == posicao) {
+        return i;
+      }
+
+      posicaoAtual++;
+    }
+  }
+
+  return -1;
+}
+
+void exibir_produto_carrinho(byte posicao) {
+  int indiceProduto = encontrar_indice_carrinho(posicao);
+
+  if (indiceProduto == -1) {
+    return;
+  }
+
+  copiar_texto_flash(produtos, indiceProduto);
+
+  // Limpa somente a segunda linha. O cabecalho da primeira linha permanece fixo.
+  lcd.setCursor(0, 1);
+  lcd.print(F("                "));
+  lcd.setCursor(0, 1);
+
+  // Formato que cabe no LCD 16x2 com os produtos atuais:
+  // Exemplo: 2 Feijao 13,00 3
+  lcd.print(obter_id(indiceProduto));
+  lcd.print(' ');
+
+  // Usa somente 6 caracteres do nome para a linha sempre caber.
+  for (byte i = 0; i < 6; i++) {
+    if (textoBuffer[i] != '\0') {
+      lcd.print(textoBuffer[i]);
+    } 
+    else {
+      lcd.print(' ');
+    }
+  }
+
+  lcd.print(' ');
+  imprimir_preco(obter_preco(indiceProduto));
+  lcd.print(' ');
+  lcd.print(quantidadesCarrinho[indiceProduto]);
+}
+
+// Funcao de espera
 void processando() {
   lcd.clear();
-  exibir_texto_pequeno("Processando...", 0);
+  exibir_texto_pequeno_P(PSTR("Processando..."), 0);
   delay(1000);
 }
 
-// Funções de erro e confirmação
+// Funcoes de erro e confirmacao
 void confirmacao() {
   digitalWrite(LED_VERDE, HIGH);
 
-  tone(BUZZER, 1000, 300);
-  delay(300);
+  tone(BUZZER, 700, 120);
+  delay(150);
 
+  tone(BUZZER, 1000, 120);
+  delay(150);
+
+  tone(BUZZER, 1400, 250);
+  delay(280);
+
+  noTone(BUZZER);
   digitalWrite(LED_VERDE, LOW);
 }
 
 void erro() {
   digitalWrite(LED_VERMELHO, HIGH);
 
-  tone(BUZZER, 300, 500);
-  delay(500);
+  tone(BUZZER, 250, 250);
+  delay(1000);
 
+  tone(BUZZER, 180, 350);
+  delay(1000);
+
+  noTone(BUZZER);
   digitalWrite(LED_VERMELHO, LOW);
 }
 
-// Função do botão voltar
-
+// Funcao do botao voltar
 bool voltar() {
   if (digitalRead(BTN_BACK) == LOW) {
     while (digitalRead(BTN_BACK) == LOW) {
@@ -195,9 +299,23 @@ bool voltar() {
   return false;
 }
 
-// -------------------------------------------------------------------------------
-// ÍNCIO DO CÓDIGO
-// -------------------------------------------------------------------------------
+void inicio_carrinho() {
+  lcd.clear();
+
+  exibir_texto_pequeno_P(PSTR("Total produtos:"), 0);
+
+  lcd.setCursor(0, 1);
+  lcd.print(quantidadeCarrinho);
+  lcd.print(F(" produtos"));
+
+  delay(1500);
+
+  lcd.clear();
+}
+
+// -----------------------------------------------------------------------------
+// INICIO DO CODIGO
+// -----------------------------------------------------------------------------
 
 void setup() {
   Serial.begin(9600);
@@ -221,14 +339,14 @@ void loop() {
   navegacao_menu();
 }
 
-// Funções de inicialização (regras e boas vindas)
+// Funcoes de inicializacao (regras e boas-vindas)
 void inicializacao() {
-  exibir_texto_grande("Seja bem-vindo a nossa loja!", 0, 0);
-  exibir_texto_grande("A seguir serao exibidas as regras!", 0, 0);
+  exibir_texto_grande_P(PSTR("Seja bem-vindo a nossa loja!"), 0, 0);
+  exibir_texto_grande_P(PSTR("A seguir serao exibidas as regras!"), 0, 0);
 
   mostrar_regras();
   delay(200);
-  exibir_texto_grande("Voce sera encaminhado para o menu!", 0, 0);
+  exibir_texto_grande_P(PSTR("Voce sera encaminhado para o menu!"), 0, 0);
   delay(200);
   processando();
   mostrar_menu();
@@ -239,36 +357,39 @@ void mostrar_regras() {
   lcd.home();
 
   lcd.setCursor(0, 0);
-  lcd.print("Regras:");
+  lcd.print(F("Regras:"));
 
-  for (int i = 0; i < total_opcoes; i++) {
-    exibir_texto_pequeno(regras[i], 1);
+  for (byte i = 0; i < TOTAL_OPCOES; i++) {
+    copiar_texto_flash(regras, i);
+    exibir_texto_pequeno(textoBuffer, 1);
     delay(1500);
   }
 
   lcd.clear();
 }
 
-// Funções do menu
+// Funcoes do menu
 void mostrar_menu() {
   lcd.clear();
   lcd.home();
 
-  String titulo = "Menu " + String(indice_menu + 1) + "/" + String(total_opcoes_menu);
-  String texto = menu[indice_menu];
-
   lcd.setCursor(0, 0);
-  lcd.print(titulo);
+  lcd.print(F("Menu "));
+  lcd.print(indice_menu + 1);
+  lcd.print('/');
+  lcd.print(TOTAL_OPCOES_MENU);
+
+  copiar_texto_flash(menu, indice_menu);
 
   lcd.setCursor(0, 1);
-  lcd.print(texto);
+  lcd.print(textoBuffer);
 }
 
 void navegacao_menu() {
   if (digitalRead(BTN_DOWN) == LOW) {
     indice_menu++;
 
-    if (indice_menu > total_opcoes_menu - 1) {
+    if (indice_menu >= TOTAL_OPCOES_MENU) {
       indice_menu = 0;
     }
 
@@ -277,10 +398,11 @@ void navegacao_menu() {
   }
 
   if (digitalRead(BTN_UP) == LOW) {
-    indice_menu--;
-
-    if (indice_menu < 0) {
-      indice_menu = total_opcoes_menu - 1;
+    if (indice_menu == 0) {
+      indice_menu = TOTAL_OPCOES_MENU - 1;
+    } 
+    else {
+      indice_menu--;
     }
 
     mostrar_menu();
@@ -293,7 +415,7 @@ void navegacao_menu() {
   }
 }
 
-void esperar_soltar(int botao) {
+void esperar_soltar(byte botao) {
   delay(150);
 
   while (digitalRead(botao) == LOW) {
@@ -326,21 +448,20 @@ void executar_opcao_menu() {
   }
 }
 
-// -------------------------------------------------------------------------------
-// FUNÇÕES (AÇÕES) DO SISTEMA
-// -------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// FUNCOES (ACOES) DO SISTEMA
+// -----------------------------------------------------------------------------
 
 void ver_produtos() {
   //
 }
 
-// -------------------------------------------------------------------------------
-// FUNÇÃO ADICIONAR por Eduarda
-// -------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
+// FUNCAO ADICIONAR por Eduarda
+// ----------------------------------------------------------------------------
 
 void adicionar_produto() {
   int indiceProduto = -1;
-  int indiceProdutoCarrinho = -1;
   int id;
 
   processando();
@@ -349,9 +470,9 @@ void adicionar_produto() {
   while (indiceProduto == -1) {
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("Digite o ID");
+    lcd.print(F("Digite o ID"));
     lcd.setCursor(0, 1);
-    lcd.print("do produto:");
+    lcd.print(F("do produto:"));
 
     while (Serial.available() == 0) {
       if (voltar()) {
@@ -366,8 +487,8 @@ void adicionar_produto() {
       Serial.read();
     }
 
-    for (int i = 0; i < quantidadeProdutos; i++) {
-      if (id == ids[i]) {
+    for (byte i = 0; i < QUANTIDADE_PRODUTOS; i++) {
+      if (id == obter_id(i)) {
         indiceProduto = i;
         break;
       }
@@ -376,16 +497,16 @@ void adicionar_produto() {
     if (indiceProduto == -1) {
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("ID invalido");
+      lcd.print(F("ID invalido"));
       lcd.setCursor(0, 1);
-      lcd.print("Tente novamente");
+      lcd.print(F("Tente novamente"));
       delay(1500);
     }
   }
 
   // Verifica se o produto tem estoque
   if (quantidades[indiceProduto] <= 0) {
-    exibir_texto_grande("Produto sem estoque!", 0, 0);
+    exibir_texto_grande_P(PSTR("Produto sem estoque!"), 0, 0);
     mostrar_menu();
     return;
   }
@@ -393,9 +514,9 @@ void adicionar_produto() {
   // Pede a quantidade
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Digite a");
+  lcd.print(F("Digite a"));
   lcd.setCursor(0, 1);
-  lcd.print("quantidade:");
+  lcd.print(F("quantidade:"));
 
   while (Serial.available() == 0) {
     if (voltar()) {
@@ -412,21 +533,20 @@ void adicionar_produto() {
 
   // Continua pedindo enquanto a quantidade for invalida
   while (quantidadeProdutoCarrinho <= 0 || quantidadeProdutoCarrinho > quantidades[indiceProduto]) {
-    
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("Qtd invalida");
+    lcd.print(F("Qtd invalida"));
     lcd.setCursor(0, 1);
-    lcd.print("Estoque: ");
+    lcd.print(F("Estoque: "));
     lcd.print(quantidades[indiceProduto]);
 
     delay(1500);
 
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("Digite");
+    lcd.print(F("Digite"));
     lcd.setCursor(0, 1);
-    lcd.print("novamente:");
+    lcd.print(F("novamente:"));
 
     while (Serial.available() == 0) {
       if (voltar()) {
@@ -443,97 +563,63 @@ void adicionar_produto() {
     }
   }
 
-  // Verifica se o produto ja existe no carrinho
-  for (int i = 0; i < quantidadeCarrinho; i++) {
-    if (carrinho[i] == produtos[indiceProduto]) {
-      indiceProdutoCarrinho = i;
-      break;
-    }
-  }
-
-  // Produto novo: ocupa uma nova posicao
-  if (indiceProdutoCarrinho == -1) {
-    if (quantidadeCarrinho >= 10) {
-      exibir_texto_grande("Carrinho cheio!", 0, 0);
-      mostrar_menu();
-      return;
-    }
-
-    idsCarrinho[quantidadeCarrinho] = ids[indiceProduto];
-    carrinho[quantidadeCarrinho] = produtos[indiceProduto];
-    precosCarrinho[quantidadeCarrinho] = precos[indiceProduto];
-    quantidadesCarrinho[quantidadeCarrinho] = quantidadeProdutoCarrinho;
-
+  // Se esse produto ainda nao estava no carrinho, ele vira um novo tipo.
+  if (quantidadesCarrinho[indiceProduto] == 0) {
     quantidadeCarrinho++;
   }
-  // Produto repetido: apenas soma a quantidade
-  else {
-    quantidadesCarrinho[indiceProdutoCarrinho] += quantidadeProdutoCarrinho;
-  }
 
-  // Atualiza estoque e total
+  // Soma a quantidade diretamente usando o indice do produto.
+  quantidadesCarrinho[indiceProduto] += quantidadeProdutoCarrinho;
+
+  // Atualiza estoque e total.
   quantidades[indiceProduto] -= quantidadeProdutoCarrinho;
-  precoCarrinho += quantidadeProdutoCarrinho * precos[indiceProduto];
+  precoCarrinhoCentavos += (unsigned long) quantidadeProdutoCarrinho * obter_preco(indiceProduto);
+
   processando();
-  exibir_texto_grande("Produto adicionado com sucesso!", 0, 0);
+  exibir_texto_grande_P(PSTR("Produto adicionado com sucesso!"), 0, 0);
   mostrar_menu();
 }
 
 // -------------------------------------------------------------------------------
-// FUNÇÃO VER CARRINHO por Dafny
+// FUNCAO VER CARRINHO por Dafny
 // -------------------------------------------------------------------------------
 
 void ver_carrinho() {
-  int pagina_atual = 0;
-  int total_itens = 0;
+  byte pagina_atual = 0;
 
-  // Soma a quantidade total de itens
-  for (int i = 0; i < quantidadeCarrinho; i++) {
-    total_itens += quantidadesCarrinho[i];
-  }
-
-  // Verifica se o carrinho esta vazio
+  // quantidadeCarrinho representa somente os tipos de produtos no carrinho.
+  // O total em reais nao vira uma pagina contada como produto.
   if (quantidadeCarrinho == 0) {
-    exibir_texto_grande("Carrinho vazio!", 0, 0);
+    exibir_texto_grande_P(PSTR("Carrinho vazio!"), 0, 0);
+    erro();
+    delay(1000);
     mostrar_menu();
     return;
   }
 
-  // Exibe quantidade de itens
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Carrinho:");
-  lcd.setCursor(0, 1);
-  lcd.print(total_itens);
-  lcd.print(" itens");
-  delay(1500);
+  inicio_carrinho();
 
-  // Exibe cabecalho
-  exibir_texto_grande("ID | NOME | PRECO | QTD", 0, 0);
+  lcd.clear();
 
   while (true) {
+    // Cabecalho fixo da primeira linha: cabe nas 16 colunas do LCD.
+    lcd.setCursor(0, 0);
+    lcd.print(F("ID|NOME|PRECO|Q"));
 
-    // Mostra produto atual
     if (pagina_atual < quantidadeCarrinho) {
       exibir_produto_carrinho(pagina_atual);
-    }
-
-    // Mostra total depois do ultimo produto
+    } 
     else {
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Total:");
-
+      // Depois do ultimo produto, a segunda linha mostra apenas o total.
+      // Essa tela nao altera quantidadeCarrinho.
       lcd.setCursor(0, 1);
-      lcd.print("R$ ");
-      lcd.print(precoCarrinho);
-
-      delay(1500);
+      lcd.print(F("                "));
+      lcd.setCursor(0, 1);
+      lcd.print(F("Total R$ "));
+      imprimir_preco(precoCarrinhoCentavos);
     }
 
-    // Espera navegacao
     while (true) {
-
       if (voltar()) {
         return;
       }
@@ -541,6 +627,7 @@ void ver_carrinho() {
       if (digitalRead(BTN_DOWN) == LOW) {
         esperar_soltar(BTN_DOWN);
 
+        // Vai ate a pagina do total, mas nao passa dela.
         if (pagina_atual < quantidadeCarrinho) {
           pagina_atual++;
         }
@@ -564,9 +651,9 @@ void ver_carrinho() {
 }
 
 void excluir_produto() { // Alberto
-  // Exibir de forma estatica no topo a mensagem 
+  // Exibir de forma estatica no topo a mensagem
 }
 
-void pagar() { // Ícaro
+void pagar() { // Icaro
   //
 }
