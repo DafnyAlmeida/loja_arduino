@@ -453,7 +453,65 @@ void executar_opcao_menu() {
 // -----------------------------------------------------------------------------
 
 void ver_produtos() {
-  //
+  byte indiceProduto = 0;
+
+  while (true) {
+    lcd.clear();
+    copiar_texto_flash(produtos, indiceProduto);
+
+    lcd.setCursor(0, 0);
+    lcd.print(F('ID: '));
+    lcd.print(obter_id(indiceProduto));
+    lcd.print(' ');
+    lcd.print(textoBuffer);
+
+    lcd.setCursor(0, 1);
+    lcd.print(F('Qtd: '));
+    lcd.print(quantidades[indiceProduto]);
+
+    while (true) {
+      if (voltar()) {
+        return;
+      }
+
+      if (digitalRead(BTN_DOWN) == LOW) {
+        esperar_soltar(BTN_DOWN);
+
+        indiceProduto++;
+
+        if (indiceProduto >= QUANTIDADE_PRODUTOS) {
+          indiceProduto = 0;
+        }
+
+        break;
+      }
+
+      if (digitalRead(BTN_UP) == LOW) {
+        esperar_soltar(BTN_UP);
+
+        if (indiceProduto == 0) {
+          indiceProduto = QUANTIDADE_PRODUTOS - 1;
+        } 
+        else {
+          indiceProduto--;
+        }
+
+        break;
+      }
+
+      if (digitalRead(BTN_OK) == LOW) {
+        esperar_soltar(BTN_OK);
+        lcd.clear();
+        lcd.setCursor(0, 1);
+        lcd.print(F('R$'));
+
+        imprimir_preco(obter_preco(indiceProduto));
+        delay(2000);
+        break;
+      }
+      delay(10);
+    }
+  }
 }
 
 // ----------------------------------------------------------------------------
