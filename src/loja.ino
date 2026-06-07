@@ -710,6 +710,10 @@ void excluir_produto() { // Alberto
   // Exibir de forma estatica no topo a mensagem
 }
 
+// -------------------------------------------------------------------------------
+// FUNCAO VER PAGAR por Ícaro
+// -------------------------------------------------------------------------------
+
 void pagar() { // Icaro
   if (quantidadeCarrinho == 0) {
     exibir_texto_grande_P(PSTR("Carrinho vazio!"), 0, 0);
@@ -724,17 +728,25 @@ void pagar() { // Icaro
   lcd.setCursor(0, 0);
   lcd.print(F("Total: R$ "));
   imprimir_preco(precoCarrinhoCentavos);
+
   lcd.setCursor(0, 1);
-  lcd.print(F("1:Confirmar"));
+  lcd.print(F("4:OK 3:Cancela"));
 
   while (true) {
-    if (voltar()) {
-      return;
+    // Botao 4 confirma a compra
+    if (digitalRead(BTN_OK) == LOW) {
+      esperar_soltar(BTN_OK);
+      break;
     }
 
-    if (digitalRead(BTN_DOWN) == LOW) {
-      esperar_soltar(BTN_DOWN);
-      break;
+    // Botao 3 cancela a compra
+    if (digitalRead(BTN_BACK) == LOW) {
+      esperar_soltar(BTN_BACK);
+
+      erro();
+      exibir_texto_grande_P(PSTR("Compra cancelada!"), 0, 0);
+      mostrar_menu();
+      return;
     }
   }
 
@@ -745,6 +757,7 @@ void pagar() { // Icaro
   for (byte i = 0; i < QUANTIDADE_PRODUTOS; i++) {
     quantidadesCarrinho[i] = 0;
   }
+
   quantidadeCarrinho = 0;
   precoCarrinhoCentavos = 0;
 
