@@ -711,5 +711,42 @@ void excluir_produto() { // Alberto
 }
 
 void pagar() { // Icaro
-  //
+  if (quantidadeCarrinho == 0) {
+    exibir_texto_grande_P(PSTR("Carrinho vazio!"), 0, 0);
+    erro();
+    mostrar_menu();
+    return;
+  }
+
+  processando();
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(F("Total: R$ "));
+  imprimir_preco(precoCarrinhoCentavos);
+  lcd.setCursor(0, 1);
+  lcd.print(F("1:Confirmar"));
+
+  while (true) {
+    if (voltar()) {
+      return;
+    }
+
+    if (digitalRead(BTN_DOWN) == LOW) {
+      esperar_soltar(BTN_DOWN);
+      break;
+    }
+  }
+
+  processando();
+  confirmacao();
+  exibir_texto_grande_P(PSTR("Compra realizada com sucesso!"), 0, 0);
+
+  for (byte i = 0; i < QUANTIDADE_PRODUTOS; i++) {
+    quantidadesCarrinho[i] = 0;
+  }
+  quantidadeCarrinho = 0;
+  precoCarrinhoCentavos = 0;
+
+  mostrar_menu();
 }
