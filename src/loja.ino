@@ -452,7 +452,13 @@ void executar_opcao_menu() {
 // FUNCOES (ACOES) DO SISTEMA
 // -----------------------------------------------------------------------------
 
+
+// -----------------------------------------------------------------------------
+// FUNÇÃO VER PRODUTOS por Luna
+// -----------------------------------------------------------------------------
+
 void ver_produtos() {
+  processando();
   byte indiceProduto = 0;
 
   while (true) {
@@ -460,14 +466,16 @@ void ver_produtos() {
     copiar_texto_flash(produtos, indiceProduto);
 
     lcd.setCursor(0, 0);
-    lcd.print(F('ID: '));
+    lcd.print(F("ID: "));
     lcd.print(obter_id(indiceProduto));
     lcd.print(' ');
     lcd.print(textoBuffer);
 
     lcd.setCursor(0, 1);
-    lcd.print(F('Qtd: '));
+    lcd.print(F("Qtd: "));
     lcd.print(quantidades[indiceProduto]);
+    lcd.print(F(" R$"));
+    imprimir_preco(obter_preco(indiceProduto));
 
     while (true) {
       if (voltar()) {
@@ -499,16 +507,6 @@ void ver_produtos() {
         break;
       }
 
-      if (digitalRead(BTN_OK) == LOW) {
-        esperar_soltar(BTN_OK);
-        lcd.clear();
-        lcd.setCursor(0, 1);
-        lcd.print(F('R$'));
-
-        imprimir_preco(obter_preco(indiceProduto));
-        delay(2000);
-        break;
-      }
       delay(10);
     }
   }
